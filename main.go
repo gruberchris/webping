@@ -1,8 +1,8 @@
 package main
 
 import (
+	"flag"
 	"fmt"
-	"log"
 	"net/http"
 	"net/url"
 	"os"
@@ -38,13 +38,9 @@ func parseUrl(urlString string) (string, error) {
 	return urlString, nil
 }
 
-func main() {
-	if len(os.Args) < 2 {
-		log.Fatalln("Usage: go run main.go <url1> <urls2> ... <urln>")
-	}
-
+func processSubmittedUrls(submittedUrls []string) {
 	// the channel buffer will need to be, at least, the total number of submitted url parameters
-	channelBufferLength := len(os.Args) - 1
+	channelBufferLength := len(submittedUrls)
 
 	c := make(chan string, channelBufferLength)
 	wg := sync.WaitGroup{}
@@ -52,7 +48,7 @@ func main() {
 	// total requests are the number of actual sent requests
 	totalRequests := 0
 
-	for _, urlString := range os.Args[1:] {
+	for _, urlString := range submittedUrls {
 		parsedUrl, err := parseUrl(urlString)
 
 		if err != nil {
@@ -79,4 +75,17 @@ func main() {
 	}
 
 	wg.Wait()
+}
+
+func main() {
+	flag.Parse()
+
+	submittedUrls := flag.Args()
+
+	if len(submittedUrls) == 0 {
+		fmt.Println("Usage: webping.exe <url1> <urls2> ... <urln>")
+		os.Exit(1)
+	}
+
+	processSubmittedUrls(submittedUrls)
 }
