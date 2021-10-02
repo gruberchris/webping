@@ -7,12 +7,22 @@ import (
 	"net/url"
 	"os"
 	"sync"
+	"time"
 )
 
-func sendRequest(c chan string, wg *sync.WaitGroup, urlString string) {
+type WebpingResult struct {
+	Message        string
+	ElapsedSeconds float64
+}
+
+func sendRequest(c chan WebpingResult, wg *sync.WaitGroup, urlString string) {
 	defer wg.Done()
 
+	startTime := time.Now()
+
 	res, err := http.Get(urlString)
+
+	elapsedTime := time.Since(startTime)
 	resultMessage := ""
 
 	if err != nil {
@@ -21,7 +31,10 @@ func sendRequest(c chan string, wg *sync.WaitGroup, urlString string) {
 		resultMessage = fmt.Sprintf("[%d] %s", res.StatusCode, urlString)
 	}
 
-	c <- resultMessage
+	c <- WebpingResult{
+		Message:        resultMessage,
+		ElapsedSeconds: elapsedTime.Seconds(),
+	}
 }
 
 func parseUrl(urlString string) (string, error) {
@@ -42,7 +55,7 @@ func processSubmittedUrls(submittedUrls []string) {
 	// the channel buffer will need to be, at least, the total number of submitted url parameters
 	channelBufferLength := len(submittedUrls)
 
-	c := make(chan string, channelBufferLength)
+	c := make(chan WebpingResult, channelBufferLength)
 	wg := sync.WaitGroup{}
 
 	// total requests are the number of actual sent requests
@@ -63,8 +76,9 @@ func processSubmittedUrls(submittedUrls []string) {
 
 	i := 1
 
-	for resultMessage := range c {
-		fmt.Println(resultMessage)
+	for webpingResult := range c {
+		formattedMessage := fmt.Sprintf("%s in %v seconds", webpingResult.Message, webpingResult.ElapsedSeconds)
+		fmt.Println(formattedMessage)
 
 		// must close the channel to exit this loop
 		if i == totalRequests {
