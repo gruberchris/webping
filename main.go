@@ -17,5 +17,10 @@ func main() {
 		os.Exit(1)
 	}
 
-	webping.ProcessSubmittedUrls(submittedUrls)
+	printMessage := func(webpingResult webping.WebpingResult) {
+		formattedMessage := fmt.Sprintf("[%s] %s in %v seconds", webpingResult.StatusCode, webpingResult.RequestUrl, webpingResult.ElapsedSeconds)
+		fmt.Println(formattedMessage)
+	}
+
+	webping.ProcessSubmittedUrls(submittedUrls, printMessage)
 }

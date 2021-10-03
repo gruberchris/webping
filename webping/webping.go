@@ -1,44 +1,45 @@
 package webping
 
 import (
-	"fmt"
 	"net/http"
 	"net/url"
 	"regexp"
+	"strconv"
 	"sync"
 	"time"
 )
 
-type webpingResult struct {
-	Message        string
+type WebpingResult struct {
+	RequestUrl     string
 	ElapsedSeconds float64
+	StatusCode     string
 }
 
-func sendRequest(c chan webpingResult, wg *sync.WaitGroup, urlString string) {
+func sendRequest(c chan WebpingResult, wg *sync.WaitGroup, urlString string) {
 	// this function is a consumer
 	defer wg.Done()
 
 	startTime := time.Now()
 	res, err := http.Get(urlString)
 	elapsedTime := time.Since(startTime)
-	resultMessage := ""
+	statusCode := ""
 
 	if err != nil {
 		if match, _ := regexp.MatchString(".*lookup.*", err.Error()); match {
-			resultMessage = fmt.Sprintf("[UNKNOWN HOST] %s", urlString)
+			statusCode = "UNKNOWN HOST"
 		} else if match, _ := regexp.MatchString(".*connection.*.refused.*", err.Error()); match {
-			resultMessage = fmt.Sprintf("[CONN REFUSED] %s", urlString)
+			statusCode = "CONN REFUSED"
 		} else {
-			fmt.Println(err)
-			resultMessage = fmt.Sprintf("[NET ERROR] %s", urlString)
+			statusCode = "NET ERROR"
 		}
 	} else {
-		resultMessage = fmt.Sprintf("[%d] %s", res.StatusCode, urlString)
+		statusCode = strconv.Itoa(res.StatusCode)
 	}
 
-	c <- webpingResult{
-		Message:        resultMessage,
+	c <- WebpingResult{
+		RequestUrl:     urlString,
 		ElapsedSeconds: elapsedTime.Seconds(),
+		StatusCode:     statusCode,
 	}
 }
 
@@ -58,11 +59,11 @@ func parseUrl(urlString string) (string, error) {
 	return u.Scheme + "://" + u.Host, nil
 }
 
-func ProcessSubmittedUrls(submittedUrls []string) {
+func ProcessSubmittedUrls(submittedUrls []string, outMessage func(webpingResult WebpingResult)) {
 	// this function is the producer
 
 	// the channel buffer will need to be, at least, the total number of submitted url parameters
-	c := make(chan webpingResult, len(submittedUrls))
+	c := make(chan WebpingResult, len(submittedUrls))
 	wg := sync.WaitGroup{}
 
 	defer wg.Wait()
@@ -74,7 +75,11 @@ func ProcessSubmittedUrls(submittedUrls []string) {
 		parsedUrl, err := parseUrl(urlString)
 
 		if err != nil {
-			fmt.Println(fmt.Sprintf("[invalid url] %s", urlString))
+			invalidUrlResult := WebpingResult{
+				RequestUrl: urlString,
+				StatusCode: "INVALID",
+			}
+			outMessage(invalidUrlResult)
 			continue
 		}
 
@@ -87,14 +92,11 @@ func ProcessSubmittedUrls(submittedUrls []string) {
 
 	for webpingResult := range c {
 		totalResponses++
-		formattedMessage := fmt.Sprintf("%s in %v seconds", webpingResult.Message, webpingResult.ElapsedSeconds)
-		fmt.Println(formattedMessage)
+		outMessage(webpingResult)
 
 		if totalResponses == totalRequests {
 			// closing the channel causes this loop to end
 			close(c)
 		}
 	}
-
-	// fmt.Println("Processed " + strconv.Itoa(totalResponses) + " of " + strconv.Itoa(totalRequests) + " responses.")
 }
