@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"net/http"
 	"net/url"
+	"regexp"
 	"sync"
 	"time"
 )
@@ -18,14 +19,19 @@ func sendRequest(c chan webpingResult, wg *sync.WaitGroup, urlString string) {
 	defer wg.Done()
 
 	startTime := time.Now()
-
 	res, err := http.Get(urlString)
-
 	elapsedTime := time.Since(startTime)
 	resultMessage := ""
 
 	if err != nil {
-		resultMessage = fmt.Sprintf("[unknown host] %s", urlString)
+		if match, _ := regexp.MatchString(".*lookup.*", err.Error()); match {
+			resultMessage = fmt.Sprintf("[UNKNOWN HOST] %s", urlString)
+		} else if match, _ := regexp.MatchString(".*connection.*.refused.*", err.Error()); match {
+			resultMessage = fmt.Sprintf("[CONN REFUSED] %s", urlString)
+		} else {
+			fmt.Println(err)
+			resultMessage = fmt.Sprintf("[NET ERROR] %s", urlString)
+		}
 	} else {
 		resultMessage = fmt.Sprintf("[%d] %s", res.StatusCode, urlString)
 	}
@@ -37,17 +43,19 @@ func sendRequest(c chan webpingResult, wg *sync.WaitGroup, urlString string) {
 }
 
 func parseUrl(urlString string) (string, error) {
-	u, err := url.Parse(urlString)
+	u, err := url.ParseRequestURI(urlString)
 
-	if err != nil {
-		return "", err
+	if err != nil || u.Host == "" {
+		u, err := url.ParseRequestURI("https://" + urlString)
+
+		if err != nil {
+			return "", err
+		}
+
+		return u.Scheme + "://" + u.Host, nil
 	}
 
-	if u.Scheme == "" {
-		return "https://" + urlString, nil
-	}
-
-	return urlString, nil
+	return u.Scheme + "://" + u.Host, nil
 }
 
 func ProcessSubmittedUrls(submittedUrls []string) {
@@ -56,6 +64,8 @@ func ProcessSubmittedUrls(submittedUrls []string) {
 	// the channel buffer will need to be, at least, the total number of submitted url parameters
 	c := make(chan webpingResult, len(submittedUrls))
 	wg := sync.WaitGroup{}
+
+	defer wg.Wait()
 
 	// total requests are the number of actual sent requests
 	totalRequests := 0
@@ -73,18 +83,17 @@ func ProcessSubmittedUrls(submittedUrls []string) {
 		wg.Add(1)
 	}
 
-	for i := 1; i < totalRequests; i++ {
-		webpingResult := <-c
+	totalResponses := 1
 
+	for webpingResult := range c {
 		formattedMessage := fmt.Sprintf("%s in %v seconds", webpingResult.Message, webpingResult.ElapsedSeconds)
 		fmt.Println(formattedMessage)
 
-		// must close the channel when finished
-		if i == totalRequests {
+		if totalResponses == totalRequests {
+			// closing the channel causes this loop to end
 			close(c)
-			break
+		} else {
+			totalResponses++
 		}
 	}
-
-	wg.Wait()
 }
