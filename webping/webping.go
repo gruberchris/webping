@@ -83,17 +83,18 @@ func ProcessSubmittedUrls(submittedUrls []string) {
 		wg.Add(1)
 	}
 
-	totalResponses := 1
+	totalResponses := 0
 
 	for webpingResult := range c {
+		totalResponses++
 		formattedMessage := fmt.Sprintf("%s in %v seconds", webpingResult.Message, webpingResult.ElapsedSeconds)
 		fmt.Println(formattedMessage)
 
 		if totalResponses == totalRequests {
 			// closing the channel causes this loop to end
 			close(c)
-		} else {
-			totalResponses++
 		}
 	}
+
+	// fmt.Println("Processed " + strconv.Itoa(totalResponses) + " of " + strconv.Itoa(totalRequests) + " responses.")
 }
