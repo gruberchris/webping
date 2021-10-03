@@ -16,6 +16,7 @@ type WebpingResult struct {
 }
 
 func sendRequest(c chan WebpingResult, wg *sync.WaitGroup, urlString string) {
+	// this function is a consumer
 	defer wg.Done()
 
 	startTime := time.Now()
@@ -52,10 +53,10 @@ func parseUrl(urlString string) (string, error) {
 }
 
 func processSubmittedUrls(submittedUrls []string) {
-	// the channel buffer will need to be, at least, the total number of submitted url parameters
-	channelBufferLength := len(submittedUrls)
+	// this function is the producer
 
-	c := make(chan WebpingResult, channelBufferLength)
+	// the channel buffer will need to be, at least, the total number of submitted url parameters
+	c := make(chan WebpingResult, len(submittedUrls))
 	wg := sync.WaitGroup{}
 
 	// total requests are the number of actual sent requests
@@ -74,18 +75,17 @@ func processSubmittedUrls(submittedUrls []string) {
 		wg.Add(1)
 	}
 
-	i := 1
+	for i := 1; i < totalRequests; i++ {
+		webpingResult := <-c
 
-	for webpingResult := range c {
 		formattedMessage := fmt.Sprintf("%s in %v seconds", webpingResult.Message, webpingResult.ElapsedSeconds)
 		fmt.Println(formattedMessage)
 
-		// must close the channel to exit this loop
+		// must close the channel when finished
 		if i == totalRequests {
 			close(c)
+			break
 		}
-
-		i++
 	}
 
 	wg.Wait()
