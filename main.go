@@ -3,8 +3,8 @@ package main
 import (
 	"flag"
 	"fmt"
+	"github.com/gruberchris/webping/webping"
 	"os"
-	"webping/webping"
 )
 
 func main() {
