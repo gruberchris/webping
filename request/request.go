@@ -27,8 +27,10 @@ func sendRequest(c chan RequestResult, wg *sync.WaitGroup, urlString string) {
 	if err != nil {
 		if match, _ := regexp.MatchString(".*lookup.*", err.Error()); match {
 			statusCode = "UNKNOWN HOST"
-		} else if match, _ := regexp.MatchString(".*connection.*.refused.*", err.Error()); match {
+		} else if match, _ := regexp.MatchString(".*connection.*refused.*", err.Error()); match {
 			statusCode = "CONN REFUSED"
+		} else if match, _ := regexp.MatchString(".*unknown.*authority.*", err.Error()); match {
+			statusCode = "UNKNOWN CERT"
 		} else {
 			statusCode = "NET ERROR"
 		}
