@@ -3,7 +3,7 @@ package main
 import (
 	"flag"
 	"fmt"
-	"github.com/gruberchris/webping/webping"
+	"github.com/gruberchris/webping/request"
 	"os"
 )
 
@@ -17,10 +17,10 @@ func main() {
 		os.Exit(1)
 	}
 
-	printMessage := func(webpingResult webping.WebpingResult) {
-		formattedMessage := fmt.Sprintf("[%s] %s in %v seconds", webpingResult.StatusCode, webpingResult.RequestUrl, webpingResult.ElapsedSeconds)
+	printMessage := func(webpingResult request.RequestResult) {
+		formattedMessage := fmt.Sprintf("[%s] %s in %v seconds", webpingResult.StatusCode, webpingResult.Url, webpingResult.ElapsedSeconds)
 		fmt.Println(formattedMessage)
 	}
 
-	webping.ProcessSubmittedUrls(submittedUrls, printMessage)
+	request.ProcessSubmittedUrls(submittedUrls, printMessage)
 }

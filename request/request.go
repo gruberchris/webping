@@ -1,4 +1,4 @@
-package webping
+package request
 
 import (
 	"net/http"
@@ -9,13 +9,13 @@ import (
 	"time"
 )
 
-type WebpingResult struct {
-	RequestUrl     string
+type RequestResult struct {
+	Url            string
 	ElapsedSeconds float64
 	StatusCode     string
 }
 
-func sendRequest(c chan WebpingResult, wg *sync.WaitGroup, urlString string) {
+func sendRequest(c chan RequestResult, wg *sync.WaitGroup, urlString string) {
 	// this function is a consumer
 	defer wg.Done()
 
@@ -36,8 +36,8 @@ func sendRequest(c chan WebpingResult, wg *sync.WaitGroup, urlString string) {
 		statusCode = strconv.Itoa(res.StatusCode)
 	}
 
-	c <- WebpingResult{
-		RequestUrl:     urlString,
+	c <- RequestResult{
+		Url:            urlString,
 		ElapsedSeconds: elapsedTime.Seconds(),
 		StatusCode:     statusCode,
 	}
@@ -59,11 +59,11 @@ func parseUrl(urlString string) (string, error) {
 	return u.Scheme + "://" + u.Host, nil
 }
 
-func ProcessSubmittedUrls(submittedUrls []string, outMessage func(webpingResult WebpingResult)) {
+func ProcessSubmittedUrls(submittedUrls []string, onResult func(requestResult RequestResult)) {
 	// this function is the producer
 
 	// the channel buffer will need to be, at least, the total number of submitted url parameters
-	c := make(chan WebpingResult, len(submittedUrls))
+	c := make(chan RequestResult, len(submittedUrls))
 	wg := sync.WaitGroup{}
 
 	defer wg.Wait()
@@ -75,11 +75,11 @@ func ProcessSubmittedUrls(submittedUrls []string, outMessage func(webpingResult 
 		parsedUrl, err := parseUrl(urlString)
 
 		if err != nil {
-			invalidUrlResult := WebpingResult{
-				RequestUrl: urlString,
+			invalidUrlResult := RequestResult{
+				Url:        urlString,
 				StatusCode: "INVALID",
 			}
-			outMessage(invalidUrlResult)
+			onResult(invalidUrlResult)
 			continue
 		}
 
@@ -90,9 +90,9 @@ func ProcessSubmittedUrls(submittedUrls []string, outMessage func(webpingResult 
 
 	totalResponses := 0
 
-	for webpingResult := range c {
+	for result := range c {
 		totalResponses++
-		outMessage(webpingResult)
+		onResult(result)
 
 		if totalResponses == totalRequests {
 			// closing the channel causes this loop to end
