@@ -1,6 +1,7 @@
 package request
 
 import (
+	"context"
 	"net/http"
 	"net/url"
 	"regexp"
@@ -15,13 +16,21 @@ type RequestResult struct {
 	StatusCode     string
 }
 
-func sendRequest(c chan RequestResult, wg *sync.WaitGroup, urlString string) {
-	// this function is a consumer
+func sendRequest(c chan RequestResult, wg *sync.WaitGroup, urlString string, requestTimeout time.Duration) {
 	defer wg.Done()
 
+	ctx, cancel := context.WithTimeout(context.Background(), requestTimeout*time.Millisecond)
+
+	defer cancel()
+
+	req, _ := http.NewRequestWithContext(ctx, http.MethodGet, urlString, nil)
+
+	client := &http.Client{}
+
 	startTime := time.Now()
-	res, err := http.Get(urlString)
+	res, err := client.Do(req)
 	elapsedTime := time.Since(startTime)
+
 	statusCode := ""
 
 	if err != nil {
@@ -31,6 +40,8 @@ func sendRequest(c chan RequestResult, wg *sync.WaitGroup, urlString string) {
 			statusCode = "CONN REFUSED"
 		} else if match, _ := regexp.MatchString(".*unknown.*authority.*", err.Error()); match {
 			statusCode = "UNKNOWN CERT"
+		} else if match, _ := regexp.MatchString(".*deadline.*exceeded.*", err.Error()); match {
+			statusCode = "TIMEOUT"
 		} else {
 			statusCode = "NET ERROR"
 		}
@@ -62,8 +73,6 @@ func parseUrl(urlString string) (string, error) {
 }
 
 func ProcessSubmittedUrls(submittedUrls []string, onResult func(requestResult RequestResult)) {
-	// this function is the producer
-
 	// the channel buffer will need to be, at least, the total number of submitted url parameters
 	c := make(chan RequestResult, len(submittedUrls))
 	wg := sync.WaitGroup{}
@@ -85,7 +94,10 @@ func ProcessSubmittedUrls(submittedUrls []string, onResult func(requestResult Re
 			continue
 		}
 
-		go sendRequest(c, &wg, parsedUrl)
+		// request timeout is 5 seconds
+		const requestTimeoutInMilliseconds = 5000
+
+		go sendRequest(c, &wg, parsedUrl, requestTimeoutInMilliseconds)
 		totalRequests++
 		wg.Add(1)
 	}
